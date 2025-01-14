@@ -41,30 +41,10 @@ Changing code at runtime makes a lot of things easier. E.g. if you want to trigg
 
 ## 🔗 Build Tools
 
-To use jairo as a dependency you might want to use a build tool like maven or gradle. An easy way for each and every project, is to use [jitpack](https://jitpack.io/#micartey/jairo/main-SNAPSHOT) as it makes it easy to implement and use. The following example is for maven specific, as I personally don't use gradle that much.
+To use jairo as a dependency you might want to use a build tool like maven or gradle. 
+An easy way for each and every project, is to use [jitpack](https://jitpack.io/#micartey/jairo/main-SNAPSHOT) as it makes it easy to implement and use. 
 
-### Maven
-
-First of all add a new repository to your `pom.xml` file to be able to download the dependecies provided by jitpack.
-
-```xml
-<repositories>
-    <repository>
-        <id>jitpack.io</id>
-        <url>https://jitpack.io</url>
-    </repository>
-</repositories>
-```
-
-Lastly, after adding the repository to all your other repositories, you have to add the following segment to your dependencies.
-
-```xml
-<dependency>
-    <groupId>com.github.micartey</groupId>
-    <artifactId>jairo</artifactId>
-    <version>main-SNAPSHOT</version>
-</dependency>
-```
+You will also need to add  [javaassist](https://mvnrepository.com/artifact/org.javassist/javassist) to your project as viro doesn't include its source code.
 
 ## 🎈 Getting started
 
@@ -166,6 +146,9 @@ public static void premain(String arguments, Instrumentation instrumentation) {
 ```
 
 ### Injection
+
+I encountered issues with re-transforming classes at runtime.
+Therefore, I recommend the [Command line](#command-line) option.
 
 ```text
 Manifest-Version: 1.0

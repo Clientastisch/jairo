@@ -1,0 +1,24 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+}
+
+repositories {
+    mavenLocal()
+    maven {
+        url = uri('https://repo.maven.apache.org/maven2/')
+    }
+}
+
+dependencies {
+    api 'io.vavr:vavr:0.10.2'
+    api 'org.javassist:javassist:3.27.0-GA'
+
+    compileOnly 'org.projectlombok:lombok:1.18.8'
+}
+
+group = 'me.micartey'
+version = '1.0-SNAPSHOT'
+description = 'jairo'
+
+java.sourceCompatibility = JavaVersion.VERSION_1_8

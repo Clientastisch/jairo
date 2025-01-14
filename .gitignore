@@ -1,6 +1,8 @@
 /.idea/
 /target/
+/build/
 /runtime/
+/.gradle/
 
 *.iml
 *.bat
