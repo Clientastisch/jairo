@@ -2,14 +2,13 @@ package me.micartey.jairo;
 
 import io.vavr.control.Try;
 import javassist.*;
+import lombok.SneakyThrows;
 import me.micartey.jairo.annotation.*;
 import me.micartey.jairo.parser.FieldParser;
 import me.micartey.jairo.parser.MethodParser;
 
 import java.lang.instrument.ClassFileTransformer;
-import java.lang.instrument.IllegalClassFormatException;
 import java.lang.instrument.Instrumentation;
-import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
 import java.util.Arrays;
@@ -24,7 +23,7 @@ public class JairoTransformer implements ClassFileTransformer {
     /**
      * Add a list of {@linkplain Class observers} to define rules for
      * transforming classes.
-     *
+     * <p>
      * Observers need following annotations:
      * <ul>
      *     <li>
@@ -46,17 +45,18 @@ public class JairoTransformer implements ClassFileTransformer {
     }
 
     @Override
-    public byte[] transform(java.lang.ClassLoader loader, java.lang.String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classFileBuffer) throws IllegalClassFormatException {
+    @SneakyThrows
+    public byte[] transform(java.lang.ClassLoader loader, java.lang.String className, Class<?> classBeingRedefined, ProtectionDomain protectionDomain, byte[] classFileBuffer) {
         CtClass ctClass = Try.ofCallable(() -> this.classPool.get(className.replace("/", "."))).get();
 
-        for(Class<?> target : this.observed) {
+        for (Class<?> target : this.observed) {
             if (!match(className.replace("/", "."), target.getAnnotation(Hook.class).value()))
                 continue;
 
-            Try.ofCallable(() -> {
-                if (!target.isAnnotationPresent(Field.class))
-                    return null;
-
+            /*
+             * Create field in class definition
+             */
+            if (target.isAnnotationPresent(Field.class)) {
                 Field field = target.getAnnotation(Field.class);
 
                 String fieldHeader = new FieldParser(target)
@@ -67,10 +67,11 @@ public class JairoTransformer implements ClassFileTransformer {
 
                 CtField ctField = CtField.make(fieldHeader, ctClass);
                 ctClass.addField(ctField);
+            }
 
-                return null;
-            }).onFailure(Throwable::printStackTrace);
-
+            /*
+             * Handle method injection
+             */
             Arrays.stream(target.getMethods()).filter(method -> method.isAnnotationPresent(Overwrite.class)).forEach(method -> {
                 Optional<Return> returns = Optional.ofNullable(method.getAnnotation(Return.class));
                 Optional<Field> field = Optional.ofNullable(target.getAnnotation(Field.class));
@@ -86,7 +87,7 @@ public class JairoTransformer implements ClassFileTransformer {
                     CtMethod ctMethod = this.getMethod(ctClass, method);
                     String invoke = parser.build();
 
-                    switch (overwrite.value()) {
+                    switch(overwrite.value()) {
                         case BEFORE:
                             ctMethod.insertBefore(invoke);
                             break;
@@ -102,9 +103,7 @@ public class JairoTransformer implements ClassFileTransformer {
             });
         }
 
-        return Try.ofCallable(ctClass::toBytecode)
-                .onFailure(Throwable::printStackTrace)
-                .getOrElse(classFileBuffer);
+        return ctClass.toBytecode();
     }
 
     /**
@@ -121,7 +120,7 @@ public class JairoTransformer implements ClassFileTransformer {
      * </ul>
      *
      * @param ctClass Class to rewrite
-     * @param method Method of the observing class
+     * @param method  Method of the observing class
      * @return {@linkplain CtMethod CtMethod} which is suitable for the {@linkplain Method Method}
      * @throws NotFoundException Exception is thrown if no {@linkplain CtMethod CtMethod} is found
      */
@@ -140,42 +139,10 @@ public class JairoTransformer implements ClassFileTransformer {
     }
 
     /**
-     * Finds a {@linkplain CtConstructor CtConstructor} according to the pattern presented by
-     * one of the following:
-     *
-     * <ul>
-     *     <li>
-     *         Annotations like {@linkplain Parameter @Parameter}
-     *     </li>
-     *     <li>
-     *          Method {@link java.lang.reflect.Constructor#getTypeParameters signature}
-     *     </li>
-     * </ul>
-     *
-     * @param ctClass Class to rewrite
-     * @param constructor Constructor of the observing class
-     * @return {@linkplain CtConstructor CtConstructor} which is suitable for the {@linkplain Constructor Constructor}
-     * @throws NotFoundException Exception is thrown if no {@linkplain CtConstructor CtConstructor} is found
-     */
-    private CtConstructor getConstructor(CtClass ctClass, Constructor<?> constructor) throws NotFoundException {
-        Parameter parameter = constructor.getAnnotation(Parameter.class);
-
-        if (!constructor.isAnnotationPresent(Parameter.class)) {
-            return ctClass.getDeclaredConstructor(Arrays.stream(constructor.getParameterTypes()).map(Class::getName).map(it -> {
-                return Try.ofCallable(() -> this.classPool.get(it)).getOrNull();
-            }).toArray(CtClass[]::new));
-        }
-
-        return ctClass.getDeclaredConstructor(Arrays.stream(parameter.value()).map(Class::getName).map(var -> {
-            return Try.ofCallable(() -> this.classPool.get(var)).getOrNull();
-        }).toArray(CtClass[]::new));
-    }
-
-    /**
      * Makes sure that both {@linkplain String parameters} matches according to
      * their pattern
      *
-     * @param match classname of the class which will be transformed
+     * @param match   classname of the class which will be transformed
      * @param pattern pattern to match the classname
      * @return Whether pattern matches classname
      */
@@ -200,7 +167,7 @@ public class JairoTransformer implements ClassFileTransformer {
     public void retransform(Instrumentation instrumentation) {
         instrumentation.addTransformer(this, true);
 
-        for (Class<?> target : instrumentation.getAllLoadedClasses()) {
+        for(Class<?> target : instrumentation.getAllLoadedClasses()) {
             observed.stream().filter(observe -> match(target.getName(), observe.getAnnotation(Hook.class).value())).forEach(value -> {
                 Try.run(() -> {
                     instrumentation.retransformClasses(target);
